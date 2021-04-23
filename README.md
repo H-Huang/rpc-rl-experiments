@@ -33,7 +33,7 @@ Episode 100 - Step 22003 - Epsilon 0.9945143507382862 - Mean Reward 625.92 - Mea
 
 ## Files
 
-`main.py` - Draft implementation of `multi_process()` which uses PyTorch RPC to communicate between workers. There is 1 learner which contains the agent and action-value function, it kicks off multiple agents to interact with the environment. The agents retrieves an action from the leaner and interacts with their own environment to return an observation containing state, action, reward, next_state (s, a, r, s'). The central learner stores these in a replay buffer and reads from this buffer to train it's model. Architecture is based off of [SEED RL](https://openreview.net/pdf?id=rkgvXlrKwH). File also contains the `single_process()` implementation originally from the tutorial for testing and reference.
+`main.py` - Draft implementation of `multi_process()` which uses PyTorch RPC to communicate between workers. There is 1 learner which contains the agent and action-value function, it kicks off multiple actors to interact with the environment. The actors retrieves an action from the leaner and interacts with their individual environments to return an observation containing state, action, reward, next_state (s, a, r, s'). The central learner stores these in a replay buffer and reads from this buffer to train it's model. Architecture is based off of [SEED RL](https://openreview.net/pdf?id=rkgvXlrKwH). File also contains the `single_process()` implementation originally from the tutorial for testing and reference.
 
 `agent.py` - The MarioAgent and MarioNet. Agent uses [Double Deep Q-networks](https://arxiv.org/pdf/1509.06461.pdf) algorithm.
 
