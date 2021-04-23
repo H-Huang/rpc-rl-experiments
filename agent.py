@@ -60,7 +60,7 @@ class MarioAgent:
 
         self.save_every = 5e5  # no. of experiences between saving Mario Net
 
-        self.memory = deque(maxlen=100000)
+        self.memory = deque(maxlen=50000)
         self.batch_size = 32
         self.gamma = 0.9
 

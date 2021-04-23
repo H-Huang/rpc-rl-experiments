@@ -164,9 +164,9 @@ def run_worker(rank, world_size):
         # other ranks are the actors
         rpc.init_rpc(ACTOR_NAME.format(rank), rank=rank, world_size=world_size)
 
-    print(f"Rank {rank} shutdown")
     # block until all rpcs finish, and shutdown the RPC instance
     rpc.shutdown()
+    print(f"Rank {rank} shutdown")
 
 
 # Multi-process training using RPC

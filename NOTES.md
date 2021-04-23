@@ -15,6 +15,9 @@ Display environment SSH:
 - https://stackoverflow.com/questions/59063892/is-there-any-way-to-show-figures-in-vscode-remote-ssh-windows
 - https://github.com/microsoft/vscode-remote-release/issues/267
 
+SEED RL - Scalable and efficient deep-rl with accelerated central inference:
+- https://openreview.net/pdf?id=rkgvXlrKwH
+
 Deep Reinforcement Learning with Double Q-Learning
 - https://arxiv.org/pdf/1509.06461.pdf
 
