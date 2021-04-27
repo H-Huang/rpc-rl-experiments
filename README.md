@@ -9,7 +9,7 @@ Testing an RL application trained using multiple processes and using the [Distri
 
 ## Start
 
-Run `python main.py --world-size=5` (world_size is the only parameter supported right now). Output will look something like:
+Run `python main.py --world_size=5` (world_size is the only parameter supported right now). Output will look something like:
 
 ```
 Rank 2 start

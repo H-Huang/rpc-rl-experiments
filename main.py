@@ -18,7 +18,7 @@ ACTOR_NAME = "actor{}"
 
 
 class Learner:
-    def __init__(self, world_size):
+    def __init__(self, world_size, log_interval):
         save_dir = Path("checkpoints") / datetime.datetime.now().strftime(
             "%Y-%m-%dT%H-%M-%S"
         )
@@ -34,11 +34,13 @@ class Learner:
 
         for actor_rank in range(1, world_size):
             actor_info = rpc.get_worker_info(ACTOR_NAME.format(actor_rank))
-            self.actor_rrefs.append(remote(actor_info, Actor))
+            self.actor_rrefs.append(remote(actor_info, Actor, args=(actor_rank,)))
 
         self.update_lock = threading.Lock()
         self.episode_lock = threading.Lock()
         self.episode = 0
+
+        self.log_interval = log_interval
 
     def get_action(self, state):
         # Choose best action to take based on the current model and the given state
@@ -55,8 +57,8 @@ class Learner:
         # Logging
         self.logger.log_step(reward, loss, q)
 
-    def _actor_thread_execution(self, actor_rref, max_episodes):
-        while self.episode < max_episodes:
+    def _actor_thread_execution(self, actor_rref, num_episodes):
+        while self.episode < num_episodes:
             done = False
             while not done:
                 # Kick off a step on the actor
@@ -68,7 +70,7 @@ class Learner:
                 if done:
                     with self.episode_lock:
                         self.logger.log_episode()
-                        if self.episode % 5 == 0:
+                        if self.episode % self.log_interval == 0:
                             self.logger.record(
                                 episode=self.episode,
                                 epsilon=self.agent.exploration_rate,
@@ -76,11 +78,11 @@ class Learner:
                             )
                         self.episode += 1
 
-    def run(self, episodes=None):
+    def run(self, num_episodes):
         actor_threads = []
         for actor_rref in self.actor_rrefs:
             t = threading.Thread(
-                target=self._actor_thread_execution, args=(actor_rref, 50000)
+                target=self._actor_thread_execution, args=(actor_rref, num_episodes)
             )
             t.start()
             actor_threads.append(t)
@@ -89,8 +91,10 @@ class Learner:
 
 
 class Actor:
-    def __init__(self):
+    def __init__(self, rank):
         self.env = create_env("SuperMarioBros-1-1-v0")
+        # Seed environment with unique rank so each environment is different
+        self.env.seed(rank)
         self.is_done = True
         self.state = None
 
@@ -145,21 +149,18 @@ parser.add_argument(
     metavar="N",
     help="episode interval between logs",
 )
-parser.add_argument(
-    "--seed", type=int, default=1, metavar="S", help="random seed  for reproducibility"
-)
 args = parser.parse_args()
 
 
-def run_worker(rank, world_size):
+def run_worker(rank, world_size, num_episodes, log_interval):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "29500"
     print(f"Rank {rank} start")
     if rank == 0:
         # rank0 is the learner
         rpc.init_rpc(LEARNER_NAME, rank=rank, world_size=world_size)
-        learner = Learner(world_size)
-        learner.run()
+        learner = Learner(world_size, log_interval)
+        learner.run(num_episodes)
     else:
         # other ranks are the actors
         rpc.init_rpc(ACTOR_NAME.format(rank), rank=rank, world_size=world_size)
@@ -171,11 +172,12 @@ def run_worker(rank, world_size):
 
 # Multi-process training using RPC
 def multi_process():
-    mp.spawn(run_worker, args=(args.world_size,), nprocs=args.world_size, join=True)
+    mp.spawn(run_worker, args=(args.world_size, args.num_episodes, args.log_interval), nprocs=args.world_size, join=True)
 
 
 # Single process implementation for reference and testing
 def single_process():
+    args = parser.parse_args()
     env = create_env("SuperMarioBros-1-1-v0")
 
     use_cuda = torch.cuda.is_available()
@@ -225,7 +227,7 @@ def single_process():
 
         logger.log_episode()
 
-        if e % 5 == 0:
+        if e % args.log_interval == 0:
             logger.record(
                 episode=e, epsilon=mario.exploration_rate, step=mario.curr_step
             )
