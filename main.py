@@ -104,11 +104,12 @@ class Actor:
         state, action, reward, next_state (s, a, r, s') back to the Learner
         to save in it's replay buffer
         """
-        # print("in perform_step")
         if self.is_done:
+            # Start of a new game episode
             state = self.env.reset()
             self.is_done = False
         else:
+            # Continue existing game episode
             state = self.state
 
         # Send state to learner to get an action
@@ -120,16 +121,16 @@ class Actor:
         # Report the reward to the learner's replay buffer and update model
         learner_rref.rpc_sync().update_model(state, next_state, action, reward, done)
 
-        # set state
+        # Save the next state to be used for the next episode
         self.state = next_state
 
-        # Check if end of game
-        if done or info["flag_get"]:
+        # Check if end of game episode
+        end_episode = done or info["flag_get"]
+        if end_episode:
             self.is_done = True
             self.state = None
 
-        return done or info["flag_get"]
-
+        return end_episode
 
 parser = argparse.ArgumentParser(
     description="RPC Reinforcement Learning for Mario",
