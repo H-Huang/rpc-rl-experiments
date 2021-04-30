@@ -65,7 +65,7 @@ class Learner:
                 if done:
                     with self.episode_lock:
                         self.logger.log_episode(actor_rank)
-                        if self.episode % self.log_interval == 0:
+                        if self.episode and self.episode % self.log_interval == 0:
                             self.logger.record(
                                 episode=self.episode,
                                 epsilon=self.agent.exploration_rate,

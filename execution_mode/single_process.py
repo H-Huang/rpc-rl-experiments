@@ -52,7 +52,7 @@ def single_process_exec(args):
 
         logger.log_episode()
 
-        if e % args.log_interval == 0:
+        if e and e % args.log_interval == 0:
             logger.record(
                 episode=e, epsilon=mario.exploration_rate, step=mario.curr_step
             )

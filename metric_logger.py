@@ -80,7 +80,7 @@ class MetricLogger:
         self.ep_avg_qs.append(ep_avg_q)
 
         # clear current episode metrics for this actor
-        self.current_episode_per_actor.pop(actor_rank)
+        self.current_episode_per_actor[actor_rank] = CurrentEpisodeMetrics()
 
     def record(self, episode, epsilon, step):
         mean_ep_reward = np.round(np.mean(self.ep_rewards[-100:]), 3)
