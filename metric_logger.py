@@ -105,7 +105,7 @@ class MetricLogger:
             f"Mean Loss {mean_ep_loss} - "
             f"Mean Q Value {mean_ep_q} - "
             f"Time Delta {time_since_last_record} - "
-            f"Time {datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+            f"Time {datetime.datetime.now().strftime('%Y/%m/%dT%H:%M:%S')}"
         )
 
         with open(self.save_log, "a") as f:
@@ -113,7 +113,7 @@ class MetricLogger:
                 f"{episode:8d}{step:8d}{epsilon:10.3f}"
                 f"{mean_ep_reward:15.3f}{mean_ep_length:15.3f}{mean_ep_loss:15.3f}{mean_ep_q:15.3f}"
                 f"{time_since_last_record:15.3f}"
-                f"{datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'):>20}\n"
+                f"{datetime.datetime.now().strftime('%Y/%m/%dT%H:%M:%S'):>20}\n"
             )
 
         for metric in ["ep_rewards", "ep_lengths", "ep_avg_losses", "ep_avg_qs"]:
