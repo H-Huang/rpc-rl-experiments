@@ -17,11 +17,7 @@ ACTOR_NAME = "actor{}"
 
 
 class Learner:
-    def __init__(self, world_size, log_interval):
-        save_dir = Path("checkpoints") / datetime.datetime.now().strftime(
-            "%Y-%m-%dT%H-%M-%S"
-        )
-        save_dir.mkdir(parents=True)
+    def __init__(self, world_size, log_interval, save_dir):
         env = create_env("SuperMarioBros-1-1-v0")
 
         self.logger = MetricLogger(save_dir)
@@ -132,18 +128,18 @@ class Actor:
         return end_episode
 
 
-def run_worker(rank, world_size, num_episodes, log_interval):
+def run_worker(rank, args):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "29500"
     print(f"Rank {rank} start")
     if rank == 0:
         # rank0 is the learner
-        rpc.init_rpc(LEARNER_NAME, rank=rank, world_size=world_size)
-        learner = Learner(world_size, log_interval)
-        learner.run(num_episodes)
+        rpc.init_rpc(LEARNER_NAME, rank=rank, world_size=args.world_size)
+        learner = Learner(args.world_size, args.log_interval, args.save_dir)
+        learner.run(args.num_episodes)
     else:
         # other ranks are the actors
-        rpc.init_rpc(ACTOR_NAME.format(rank), rank=rank, world_size=world_size)
+        rpc.init_rpc(ACTOR_NAME.format(rank), rank=rank, world_size=args.world_size)
 
     # block until all rpcs finish, and shutdown the RPC instance
     rpc.shutdown()
@@ -154,7 +150,7 @@ def run_worker(rank, world_size, num_episodes, log_interval):
 def multi_process_exec(args):
     mp.spawn(
         run_worker,
-        args=(args.world_size, args.num_episodes, args.log_interval),
+        args=(args,),
         nprocs=args.world_size,
         join=True,
     )

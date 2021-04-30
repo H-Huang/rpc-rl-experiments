@@ -15,16 +15,11 @@ def single_process_exec(args):
     print(f"Using CUDA: {use_cuda}")
     print()
 
-    save_dir = Path("checkpoints") / datetime.datetime.now().strftime(
-        "%Y-%m-%dT%H-%M-%S"
-    )
-    save_dir.mkdir(parents=True)
-
     mario = MarioAgent(
-        state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=save_dir
+        state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir=args.save_dir
     )
 
-    logger = MetricLogger(save_dir)
+    logger = MetricLogger(args.save_dir)
 
     episodes = 51
     for e in range(episodes):

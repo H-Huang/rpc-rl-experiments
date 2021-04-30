@@ -1,10 +1,10 @@
 import argparse
 from enum import Enum
 import json
-from execution_mode.single_process import single_process_exec
-from execution_mode.multi_process import multi_process_exec
 import datetime
 from pathlib import Path
+from execution_mode.single_process import single_process_exec
+from execution_mode.multi_process import multi_process_exec
 
 
 class ExecutionMode(Enum):
@@ -24,7 +24,7 @@ class ExecutionMode(Enum):
 def save_args_to_config_file(args):
     argparse_dict = dict(vars(args))
     # convert all arguments which are not nums to strings
-    #
+    # e.g. ExecutionMode, PosixPath
     for key, value in argparse_dict.items():
         if type(value) != int:
             argparse_dict[key] = str(value)
@@ -42,7 +42,7 @@ def load_args_from_config_file(config_file_path):
     with open(config_file_path, "rt") as f:
         json_args = json.load(f)
 
-    json_repr = dict(json_args)
+    dict_args = dict(json_args)
 
     for key, value in json_args.items():
         if key == "execution_mode":
@@ -54,7 +54,7 @@ def load_args_from_config_file(config_file_path):
     t_args.__dict__.update(json_args)
     args = parser.parse_args(namespace=t_args)
 
-    return json_repr, args
+    return dict_args, args
 
 
 if __name__ == "__main__":
@@ -99,11 +99,22 @@ if __name__ == "__main__":
         config = save_args_to_config_file(args)
 
     # load config file
-    json_repr, args = load_args_from_config_file(args.config_file)
+    printable_args, args = load_args_from_config_file(args.config_file)
 
+    # arguments currently look like
+    """
+    {
+        "execution_mode": "single_process", 
+        "world_size": 5,
+        "num_episodes": 100,
+        "log_interval": 10,
+        "config_file": "checkpoints/2021-04-30T09-27-16/config.json",
+        "save_dir": "checkpoints/2021-04-30T09-27-16"
+    }
+    """
     print("=" * 70)
     print(f"Running with config: {args.config_file}")
-    print(json.dumps(json_repr, indent=4))
+    print(json.dumps(printable_args, indent=4))
     print("=" * 70)
 
     if args.execution_mode == ExecutionMode.single_process:
