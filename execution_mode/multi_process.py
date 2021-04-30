@@ -41,7 +41,7 @@ class Learner:
         # Choose best action to take based on the current model and the given state
         return self.agent.act(state)
 
-    def update_model(self, state, next_state, action, reward, done):
+    def update_model(self, actor_rank, state, next_state, action, reward, done):
         # Save to replay buffer
         self.agent.cache(state, next_state, action, reward, done)
 
@@ -50,21 +50,21 @@ class Learner:
             q, loss = self.agent.learn()
 
         # Logging
-        self.logger.log_step(reward, loss, q)
+        self.logger.log_step(reward, loss, q, actor_rank)
 
     def _actor_thread_execution(self, actor_rref, num_episodes):
         while self.episode < num_episodes:
             done = False
             while not done:
                 # Kick off a step on the actor
-                done = rpc_sync(
+                actor_rank, done = rpc_sync(
                     actor_rref.owner(),
                     actor_rref.rpc_sync().perform_step,
                     args=(self.learner_rref,),
                 )
                 if done:
                     with self.episode_lock:
-                        self.logger.log_episode()
+                        self.logger.log_episode(actor_rank)
                         if self.episode % self.log_interval == 0:
                             self.logger.record(
                                 episode=self.episode,
@@ -87,6 +87,7 @@ class Learner:
 
 class Actor:
     def __init__(self, rank):
+        self.rank = rank
         self.env = create_env("SuperMarioBros-1-1-v0")
         # Seed environment with unique rank so each environment is different
         self.env.seed(rank)
@@ -114,7 +115,9 @@ class Actor:
         next_state, reward, done, info = self.env.step(action)
 
         # Report the reward to the learner's replay buffer and update model
-        learner_rref.rpc_sync().update_model(state, next_state, action, reward, done)
+        learner_rref.rpc_sync().update_model(
+            self.rank, state, next_state, action, reward, done
+        )
 
         # Save the next state to be used for the next episode
         self.state = next_state
@@ -125,7 +128,7 @@ class Actor:
             self.is_done = True
             self.state = None
 
-        return end_episode
+        return self.rank, end_episode
 
 
 def run_worker(rank, args):

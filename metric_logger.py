@@ -1,6 +1,16 @@
 import numpy as np
 import time, datetime
 import matplotlib.pyplot as plt
+from dataclasses import dataclass
+
+
+@dataclass
+class CurrentEpisodeMetrics:
+    reward: float = 0.0
+    length: int = 0
+    loss: float = 0.0
+    q: float = 0.0
+    loss_length: int = 0
 
 
 class MetricLogger:
@@ -29,41 +39,48 @@ class MetricLogger:
         self.moving_avg_ep_avg_losses = []
         self.moving_avg_ep_avg_qs = []
 
-        # Current episode metric
-        self.init_episode()
+        # Current episode metrics for each actor
+        self.current_episode_per_actor = {}
 
         # Timing
         self.record_time = time.time()
 
-    def init_episode(self):
-        self.curr_ep_reward = 0.0
-        self.curr_ep_length = 0
-        self.curr_ep_loss = 0.0
-        self.curr_ep_q = 0.0
-        self.curr_ep_loss_length = 0
+    def log_step(self, reward, loss, q, actor_rank="default"):
+        # Either retrieve current epsiode metrics or create new if it doesn't exist
+        curr_ep = self.current_episode_per_actor.get(
+            actor_rank, CurrentEpisodeMetrics()
+        )
+        self.current_episode_per_actor[actor_rank] = curr_ep
 
-    def log_step(self, reward, loss, q):
-        self.curr_ep_reward += reward
-        self.curr_ep_length += 1
+        curr_ep.reward += reward
+        curr_ep.length += 1
         if loss:
-            self.curr_ep_loss += loss
-            self.curr_ep_q += q
-            self.curr_ep_loss_length += 1
+            curr_ep.loss += loss
+            curr_ep.q += q
+            curr_ep.loss_length += 1
 
-    def log_episode(self):
+    def log_episode(self, actor_rank="default"):
         "Mark end of episode"
-        self.ep_rewards.append(self.curr_ep_reward)
-        self.ep_lengths.append(self.curr_ep_length)
-        if self.curr_ep_loss_length == 0:
+        curr_ep = self.current_episode_per_actor[actor_rank]
+        self.ep_rewards.append(curr_ep.reward)
+        self.ep_lengths.append(curr_ep.length)
+        if curr_ep.loss_length == 0:
             ep_avg_loss = 0
             ep_avg_q = 0
         else:
-            ep_avg_loss = np.round(self.curr_ep_loss / self.curr_ep_loss_length, 5)
-            ep_avg_q = np.round(self.curr_ep_q / self.curr_ep_loss_length, 5)
+            ep_avg_loss = np.round(
+                curr_ep.loss / curr_ep.loss_length,
+                5,
+            )
+            ep_avg_q = np.round(
+                curr_ep.q / curr_ep.loss_length,
+                5,
+            )
         self.ep_avg_losses.append(ep_avg_loss)
         self.ep_avg_qs.append(ep_avg_q)
 
-        self.init_episode()
+        # clear current episode metrics for this actor
+        self.current_episode_per_actor.pop(actor_rank)
 
     def record(self, episode, epsilon, step):
         mean_ep_reward = np.round(np.mean(self.ep_rewards[-100:]), 3)
