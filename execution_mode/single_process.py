@@ -21,8 +21,7 @@ def single_process_exec(args):
 
     logger = MetricLogger(args.save_dir)
 
-    episodes = 51
-    for e in range(episodes):
+    for e in range(args.num_episodes):
 
         state = env.reset()
 

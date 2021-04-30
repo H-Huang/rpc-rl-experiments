@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # user arguments
     parser.add_argument(
         "--execution_mode",
-        default=ExecutionMode.single_process,
+        default=ExecutionMode.cpu_rpc,
         type=ExecutionMode,
         choices=list(ExecutionMode),
         help="type of mode to run the experiment with",
