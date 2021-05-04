@@ -1,0 +1,8 @@
+{
+    "execution_mode": "single_process",
+    "world_size": 5,
+    "num_episodes": 50000,
+    "log_interval": 20,
+    "config_file": "checkpoints/2021-05-03T16-47-02/config.json",
+    "save_dir": "checkpoints/2021-05-03T16-47-02"
+}

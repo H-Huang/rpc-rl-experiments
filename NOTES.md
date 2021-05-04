@@ -27,3 +27,6 @@ Distributed Deep Reinforcement Learning: An Overview:
 Mario tutorial:
 - https://pytorch.org/tutorials/intermediate/mario_rl_tutorial.html
 - https://github.com/yuansongFeng/MadMario/
+
+SLURM:
+- srun vs. sbatch (https://stackoverflow.com/questions/43767866/slurm-srun-vs-sbatch-and-their-parameters)

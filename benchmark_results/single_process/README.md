@@ -1,0 +1,1 @@
+run this command from repository root: `sbatch ./benchmark_results/single_process/sbatch.sh`
