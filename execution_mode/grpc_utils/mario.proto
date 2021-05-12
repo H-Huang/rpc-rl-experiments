@@ -1,0 +1,21 @@
+
+syntax = "proto3";
+// The document of proto3: https://developers.google.com/protocol-buffers/docs/proto3
+
+// Package name definition, which can be omitted in Python.
+package mario;
+
+
+// pack everything into a bytes
+message Request {
+    bytes observation = 1;
+}
+
+message Response {
+    bytes next_action = 1;
+}
+
+
+service GRPCMario {
+    rpc get_action (Request) returns (Response);
+}
