@@ -5,20 +5,8 @@ import datetime
 from pathlib import Path
 from execution_mode.single_process import single_process_exec
 from execution_mode.multi_process import multi_process_exec
-
-
-class ExecutionMode(Enum):
-    grpc = "grpc"
-    cpu_rpc = "cpu_rpc"
-    cuda_rpc = "cuda_rpc"
-    cuda_rpc_with_batch = "cuda_rpc_with_batch"
-    single_process = "single_process"
-
-    def __str__(self):
-        return self.value
-
-    def __repr__(self):
-        return str(self)
+from execution_mode.grpc_multi_process import grpc_multi_process_exec
+from execution_mode.execution_mode import ExecutionMode
 
 
 def save_args_to_config_file(args):
@@ -119,5 +107,7 @@ if __name__ == "__main__":
 
     if args.execution_mode == ExecutionMode.single_process:
         single_process_exec(args)
+    elif args.execution_mode == ExecutionMode.grpc:
+        grpc_multi_process_exec(args)
     else:
         multi_process_exec(args)

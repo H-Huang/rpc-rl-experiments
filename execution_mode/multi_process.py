@@ -11,13 +11,13 @@ from env_wrappers import create_env
 from agent import MarioAgent
 from metric_logger import MetricLogger
 import threading
+from .execution_mode import ExecutionMode
 
-LEARNER_NAME = "learner"
-ACTOR_NAME = "actor{}"
+WORKER_NAME = "worker{}"
 
 
 class Learner:
-    def __init__(self, world_size, log_interval, save_dir):
+    def __init__(self, execution_mode, world_size, log_interval, save_dir):
         env = create_env("SuperMarioBros-1-1-v0")
 
         self.logger = MetricLogger(save_dir)
@@ -28,8 +28,8 @@ class Learner:
         self.actor_rrefs = []
 
         for actor_rank in range(1, world_size):
-            actor_info = rpc.get_worker_info(ACTOR_NAME.format(actor_rank))
-            self.actor_rrefs.append(remote(actor_info, Actor, args=(actor_rank,)))
+            actor_info = rpc.get_worker_info(WORKER_NAME.format(actor_rank))
+            self.actor_rrefs.append(remote(actor_info, Actor, args=(actor_rank, execution_mode)))
 
         self.update_lock = threading.Lock()
         self.episode_lock = threading.Lock()
@@ -86,13 +86,21 @@ class Learner:
 
 
 class Actor:
-    def __init__(self, rank):
+    def __init__(self, rank, execution_mode):
         self.rank = rank
+        self.execution_mode = execution_mode
         self.env = create_env("SuperMarioBros-1-1-v0")
+        # convert env to GPU
+        
         # Seed environment with unique rank so each environment is different
         self.env.seed(rank)
         self.is_done = True
         self.state = None
+
+    def _rpc_update_model(self, learner_rref, state, next_state, action, reward, done):
+        learner_rref.rpc_sync().update_model(
+            self.rank, state, next_state, action, reward, done
+        )
 
     def perform_step(self, learner_rref):
         """
@@ -109,15 +117,19 @@ class Actor:
             state = self.state
 
         # Send state to learner to get an action
+        print(state)
         action = learner_rref.rpc_sync().get_action(state)
 
         # Perform action
         next_state, reward, done, info = self.env.step(action)
+        # print(next_state)
+        # print(torch.from_numpy(next_state))
 
         # Report the reward to the learner's replay buffer and update model
-        learner_rref.rpc_sync().update_model(
-            self.rank, state, next_state, action, reward, done
-        )
+        # learner_rref.rpc_sync().update_model(
+        #     self.rank, state, next_state, action, reward, done
+        # )
+        self._rpc_update_model(learner_rref, state, next_state, action, reward, done)
 
         # Save the next state to be used for the next episode
         self.state = next_state
@@ -137,12 +149,18 @@ def run_worker(rank, args):
     print(f"Rank {rank} start")
     if rank == 0:
         # rank0 is the learner
-        rpc.init_rpc(LEARNER_NAME, rank=rank, world_size=args.world_size)
-        learner = Learner(args.world_size, args.log_interval, args.save_dir)
+        rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=args.world_size)
+        learner = Learner(args.execution_mode, args.world_size, args.log_interval, args.save_dir)
         learner.run(args.num_episodes)
     else:
         # other ranks are the actors
-        rpc.init_rpc(ACTOR_NAME.format(rank), rank=rank, world_size=args.world_size)
+        options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=128)
+        if args.execution_mode == ExecutionMode.cuda_rpc:
+            mapping = {}
+            mapping[rank] = 0
+            print(f"setting cuda_rpc options {mapping}")
+            options.set_device_map(WORKER_NAME.format(0), mapping)
+        rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=args.world_size, rpc_backend_options=options)
 
     # block until all rpcs finish, and shutdown the RPC instance
     rpc.shutdown()

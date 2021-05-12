@@ -11,7 +11,7 @@ class MarioNet(nn.Module):
     input -> (conv2d + relu) x 3 -> flatten -> (dense + relu) x 2 -> output
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, device="cuda:0"):
         super().__init__()
         c, h, w = input_dim
 

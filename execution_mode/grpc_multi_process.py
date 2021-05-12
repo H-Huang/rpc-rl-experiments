@@ -13,8 +13,8 @@ import grpc
 # adding grpc_utils to PYTHONPATH
 sys.path.append(os.path.join(pathlib.Path(__file__).parent.absolute(), "grpc_utils"))
 
-from grpc_utils import mario_pb2
-from grpc_utils import mario_pb2_grpc
+from .grpc_utils import mario_pb2
+from .grpc_utils import mario_pb2_grpc
 
 from concurrent import futures
 
@@ -81,9 +81,9 @@ def run_worker(rank):
 
 
 # Multi-process training using RPC
-if __name__ == "__main__":
+def grpc_multi_process_exec(args):
     mp.spawn(
         run_worker,
-        nprocs=3,
+        nprocs=args.world_size,
         join=True,
     )
