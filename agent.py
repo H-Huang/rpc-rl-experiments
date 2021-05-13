@@ -11,7 +11,7 @@ class MarioNet(nn.Module):
     input -> (conv2d + relu) x 3 -> flatten -> (dense + relu) x 2 -> output
     """
 
-    def __init__(self, input_dim, output_dim, device="cuda:0"):
+    def __init__(self, input_dim, output_dim):
         super().__init__()
         c, h, w = input_dim
 
@@ -70,8 +70,13 @@ class MarioAgent:
 
         # Mario's DNN to predict the most optimal action - we implement this in the Learn section
         self.net = MarioNet(self.state_dim, self.action_dim).float()
+        pytorch_total_params = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
+        print(f"{pytorch_total_params=}")
+
         if self.use_cuda:
-            self.net = self.net.to(device="cuda")
+            device = torch.device("cuda:0")
+            self.net = self.net.to(device)
+            print(next(self.net.parameters()).device)
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
@@ -112,38 +117,12 @@ class MarioAgent:
         Store the experience to self.memory (replay buffer)
 
         Inputs:
-        state (LazyFrame),
-        next_state (LazyFrame),
-        action (int),
-        reward (float),
-        done(bool))
+        state (torch.FloatTensor),
+        next_state (torch.FloatTensor),
+        action (torch.LongTensor),
+        reward (torch.DoubleTensor),
+        done(torch.BoolTensor))
         """
-        state = (
-            torch.FloatTensor(state).cuda()
-            if self.use_cuda
-            else torch.FloatTensor(state)
-        )
-        next_state = (
-            torch.FloatTensor(next_state).cuda()
-            if self.use_cuda
-            else torch.FloatTensor(next_state)
-        )
-        action = (
-            torch.LongTensor([action]).cuda()
-            if self.use_cuda
-            else torch.LongTensor([action])
-        )
-        reward = (
-            torch.DoubleTensor([reward]).cuda()
-            if self.use_cuda
-            else torch.DoubleTensor([reward])
-        )
-        done = (
-            torch.BoolTensor([done]).cuda()
-            if self.use_cuda
-            else torch.BoolTensor([done])
-        )
-
         self.memory.append(
             (
                 state,

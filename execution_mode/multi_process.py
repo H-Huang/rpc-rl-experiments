@@ -1,4 +1,5 @@
 import torch
+import time
 from torch.distributed.rpc.api import rpc_sync
 import torch.multiprocessing as mp
 import torch.distributed.rpc as rpc
@@ -12,6 +13,7 @@ from agent import MarioAgent
 from metric_logger import MetricLogger
 import threading
 from .execution_mode import ExecutionMode
+import statistics 
 
 WORKER_NAME = "worker{}"
 
@@ -37,11 +39,22 @@ class Learner:
 
         self.log_interval = log_interval
 
+        self.rpc_actions = []
+        self.device = torch.device("cuda:0")
+        self.execution_mode = execution_mode
+
     def get_action(self, state):
         # Choose best action to take based on the current model and the given state
         return self.agent.act(state)
 
-    def update_model(self, actor_rank, state, next_state, action, reward, done):
+    def update_model(self, actor_rank, state, next_state, action, reward, done, start_time):
+        if self.execution_mode != ExecutionMode.cuda_rpc:
+            state, next_state, action, reward, done = self._convert_to_tensor(state, next_state, action, reward, done)
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        self.rpc_actions.append(elapsed_time)
+        # print(state.device)
+
         # Save to replay buffer
         self.agent.cache(state, next_state, action, reward, done)
 
@@ -50,7 +63,27 @@ class Learner:
             q, loss = self.agent.learn()
 
         # Logging
-        self.logger.log_step(reward, loss, q, actor_rank)
+        if len(self.rpc_actions) % 50 == 0:
+            print(f"Avg elapsed time: {statistics.mean(self.rpc_actions):0.6f} seconds, stddev: {statistics.stdev(self.rpc_actions):0.6f}")
+        self.logger.log_step(reward.cpu().detach().numpy(), loss, q, actor_rank)
+
+    def _convert_to_tensor(self, state, next_state, action, reward, done):
+        state = (
+            torch.FloatTensor(state).to(self.device)
+        )
+        next_state = (
+            torch.FloatTensor(next_state).to(self.device)
+        )
+        action = (
+            torch.LongTensor([action]).to(self.device)
+        )
+        reward = (
+            torch.DoubleTensor([reward]).to(self.device)
+        )
+        done = (
+            torch.BoolTensor([done]).to(self.device)
+        )
+        return state, next_state, action, reward, done
 
     def _actor_thread_execution(self, actor_rref, num_episodes):
         while self.episode < num_episodes:
@@ -88,18 +121,54 @@ class Learner:
 class Actor:
     def __init__(self, rank, execution_mode):
         self.rank = rank
+        self.device = torch.device(f"cuda:{self.rank}")
         self.execution_mode = execution_mode
         self.env = create_env("SuperMarioBros-1-1-v0")
-        # convert env to GPU
         
         # Seed environment with unique rank so each environment is different
         self.env.seed(rank)
         self.is_done = True
         self.state = None
 
+        # metrics
+        self.rpc_actions = []
+
+    def _convert_to_tensor(self, state, next_state, action, reward, done):
+        convert = self.execution_mode == ExecutionMode.cuda_rpc
+
+        state = (
+            torch.FloatTensor(state).to(self.device)
+            if convert
+            else torch.FloatTensor(state)
+        )
+        next_state = (
+            torch.FloatTensor(next_state).to(self.device)
+            if convert
+            else torch.FloatTensor(next_state)
+        )
+        action = (
+            torch.LongTensor([action]).to(self.device)
+            if convert
+            else torch.LongTensor([action])
+        )
+        reward = (
+            torch.DoubleTensor([reward]).to(self.device)
+            if convert
+            else torch.DoubleTensor([reward])
+        )
+        done = (
+            torch.BoolTensor([done]).to(self.device)
+            if convert
+            else torch.BoolTensor([done])
+        )
+        return state, next_state, action, reward, done
+
     def _rpc_update_model(self, learner_rref, state, next_state, action, reward, done):
+        state, next_state, action, reward, done = self._convert_to_tensor(state, next_state, action, reward, done)
+
+        start_time = time.perf_counter()
         learner_rref.rpc_sync().update_model(
-            self.rank, state, next_state, action, reward, done
+            self.rank, state, next_state, action, reward, done, start_time
         )
 
     def perform_step(self, learner_rref):
@@ -117,7 +186,7 @@ class Actor:
             state = self.state
 
         # Send state to learner to get an action
-        print(state)
+        # print(state)
         action = learner_rref.rpc_sync().get_action(state)
 
         # Perform action
@@ -145,7 +214,7 @@ class Actor:
 
 def run_worker(rank, args):
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "29500"
+    os.environ["MASTER_PORT"] = "29501"
     print(f"Rank {rank} start")
     if rank == 0:
         # rank0 is the learner

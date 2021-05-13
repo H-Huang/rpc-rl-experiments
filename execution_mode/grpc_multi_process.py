@@ -7,6 +7,10 @@ import threading
 import sys
 import pickle
 import pathlib
+import time
+import statistics
+from env_wrappers import create_env
+
 
 import grpc
 
@@ -18,7 +22,7 @@ from .grpc_utils import mario_pb2_grpc
 
 from concurrent import futures
 
-SERVER_ADDRESS = 'localhost:29500'
+SERVER_ADDRESS = 'localhost:29501'
 
 
 class Learner(mario_pb2_grpc.GRPCMarioServicer):
@@ -28,8 +32,8 @@ class Learner(mario_pb2_grpc.GRPCMarioServicer):
     def get_action(self, request, context):
         observation = pickle.loads(request.observation)
         # dummy response
-        next_action = torch.ones(2, 4) * observation[2].sum()
-        print(f"== server got request {observation}, and returns {next_action}")
+        next_action = 1
+        # print(f"== server got request {observation}, and returns {next_action}")
         response = mario_pb2.Response(
             next_action=pickle.dumps(next_action))
         return response
@@ -45,24 +49,48 @@ class Learner(mario_pb2_grpc.GRPCMarioServicer):
 
 
 class Actor:
-    def __init__(self):
+    def __init__(self, rank):
         self.channel = grpc.insecure_channel(SERVER_ADDRESS)
         self.stub = mario_pb2_grpc.GRPCMarioStub(self.channel)
+        self.env = create_env("SuperMarioBros-1-1-v0")
+
+        # Seed environment with unique rank so each environment is different
+        self.rank = rank
+        self.env.seed(self.rank)
+        self.is_done = True
+        self.state = None
 
     def perform_step(self):
-        rank = 7
-        state = torch.zeros(3, 3)
-        next_state = torch.ones(3, 3)
-        action = torch.zeros(2, 4)
-        reward = 100
+        action = 0
+        rpc_actions = []
 
-        observation = [rank, state, next_state, action, reward]
-        request = mario_pb2.Request(observation=pickle.dumps(observation))
+        is_done = True
+        state = None
+        while True:
+            if is_done:
+                # Start of a new game episode
+                state = self.env.reset()
+                is_done = False
 
-        response = self.stub.get_action(request)
+            next_state, reward, done, info = self.env.step(action)
 
-        next_action = pickle.loads(response.next_action)
-        print(f"== client got next action {next_action}")
+            observation = [self.rank, state, next_state, action, reward]
+            start_time = time.perf_counter()
+            request = mario_pb2.Request(observation=pickle.dumps(observation))
+            response = self.stub.get_action(request)
+            next_action = pickle.loads(response.next_action)
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
+            rpc_actions.append(elapsed_time)
+            if len(rpc_actions) % 50 == 0:
+                print(f"Avg elapsed time: {statistics.mean(rpc_actions):0.6f} seconds, stddev: {statistics.stdev(rpc_actions):0.6f}")
+            state = next_state
+
+            end_episode = done or info["flag_get"]
+            if end_episode:
+                is_done = True
+                state = None
+            # print(f"== client got next action {next_action}")
 
 
 
@@ -74,7 +102,7 @@ def run_worker(rank):
         learner.run()
     else:
         # other ranks are the actors
-        actor = Actor()
+        actor = Actor(rank)
         actor.perform_step()
 
     print(f"Rank {rank} shutdown")
