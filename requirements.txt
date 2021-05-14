@@ -34,7 +34,6 @@ scipy==1.6.2
 six==1.15.0
 tifffile==2021.4.8
 toml==0.10.2
-torch==1.8.1
 torchvision==0.9.1
 tqdm==4.60.0
 typed-ast==1.4.3
