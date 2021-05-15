@@ -1,7 +1,5 @@
 import torch.nn as nn
 import torch.nn.functional as F
-
-
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_actions):
         super(ActorCritic, self).__init__()
@@ -13,7 +11,6 @@ class ActorCritic(nn.Module):
         self.critic_linear = nn.Linear(512, 1)
         self.actor_linear = nn.Linear(512, num_actions)
         self._initialize_weights()
-
     def _initialize_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
@@ -23,7 +20,6 @@ class ActorCritic(nn.Module):
             elif isinstance(module, nn.LSTMCell):
                 nn.init.constant_(module.bias_ih, 0)
                 nn.init.constant_(module.bias_hh, 0)
-
     def forward(self, x, hx, cx):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))

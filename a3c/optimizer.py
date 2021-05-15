@@ -10,6 +10,5 @@ class GlobalAdam(torch.optim.Adam):
                 state['step'] = 0
                 state['exp_avg'] = torch.zeros_like(p.data)
                 state['exp_avg_sq'] = torch.zeros_like(p.data)
-
-                state['exp_avg'].share_memory_()
-                state['exp_avg_sq'].share_memory_()
+                # state['exp_avg'].share_memory_()
+                # state['exp_avg_sq'].share_memory_()
