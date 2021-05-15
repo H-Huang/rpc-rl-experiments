@@ -1,0 +1,6 @@
+2021-05-15 19:58:30.706649 Process 1. Episode 1. Reward: 105.0. Loss: 25463.203125
+2021-05-15 19:58:57.409095 Process 1. Episode 2. Reward: 73.0. Loss: 21851.935546875
+2021-05-15 19:59:12.362929 Process 1. Episode 3. Reward: 72.0. Loss: 17457.8515625
+2021-05-15 19:59:20.039836 Process 1. Episode 4. Reward: -9.0. Loss: 7702.9892578125
+2021-05-15 19:59:38.376425 Process 1. Episode 5. Reward: 213.0. Loss: 30728.75
+2021-05-15 20:00:43.406465 Process 1. Episode 6. Reward: 94.0. Loss: 20758.47265625

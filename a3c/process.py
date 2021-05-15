@@ -14,14 +14,13 @@ import itertools
 import statistics
 import torch.distributed.rpc as rpc
 from enum import Enum
-
+import time
 
 class ExecutionMode(Enum):
     grpc = "grpc"
     cpu_rpc = "cpu_rpc"
     cuda_rpc = "cuda_rpc"
     cuda_rpc_with_batch = "cuda_rpc_with_batch"
-    single_process = "single_process"
 
     def __str__(self):
         return self.value
@@ -35,11 +34,14 @@ global_optimizer = None
 def initialize_global_model(opt, rank):
     global global_model, global_optimizer, global_rank
     global_rank = rank
-    device = torch.device("cuda:{}".format(global_rank))
-    print(device)
+    if opt.execution_mode == ExecutionMode.cuda_rpc:
+        device = torch.device("cuda:{}".format(global_rank))
+    else:
+        device = torch.device("cpu")
     _, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
     global_model = ActorCritic(num_states, num_actions)
     global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
+    print(f"Global model on {device}")
     global_model.to(device)
 
 def get_global_model_state_dict():
@@ -58,42 +60,58 @@ def update_global_model_parameters(local_model):
     global_optimizer.step()
 
 WORKER_NAME = "worker{}"
+def stamp_time(cuda=False):
+    if cuda:
+        event = torch.cuda.Event(enable_timing=True)
+        event.record()
+        return event
+    else:
+        return time.time()
+
+def compute_delay(ts, cuda=False):
+    if cuda:
+        torch.cuda.synchronize()
+        return ts["tik"].elapsed_time(ts["tok"]) / 1e3
+    else:
+        return ts["tok"] - ts["tik"]
+
 def rpc_load_global(execution_mode):
-    if execution_mode == ExecutionMode.cpu_rpc:
-        pass
+    if execution_mode in (ExecutionMode.cuda_rpc, ExecutionMode.cpu_rpc):
+        ts = {}
+        cuda = execution_mode == ExecutionMode.cuda_rpc
+        ts["tik"] = stamp_time(cuda)
+        global_state_dict = torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), get_global_model_state_dict)
+        ts["tok"] = stamp_time(cuda)
+        delay = compute_delay(ts, cuda)
+    return global_state_dict, delay
 
 def rpc_update_global(local_model_parameters):
     pass
 
-def local_train(rank, opt, log=False):
+def local_train(rank, opt, log_dir):
     torch.manual_seed(123 + rank)
     start_time = timeit.default_timer()
     env, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
-    device = torch.device("cuda:{}".format(rank))
-    print(device)
-    if log:
-        log_writer = SummaryWriter()
+    if opt.execution_mode == ExecutionMode.cuda_rpc:
+        device = torch.device("cuda:{}".format(rank))
     else:
-        log_writer = None
+        device = torch.device("cpu")
+    print(f"Rank: {rank}, Device: {device}")
+    if log_dir:
+        log_writer = SummaryWriter(log_dir)
     local_model = ActorCritic(num_states, num_actions)
     optimizer = GlobalAdam(local_model.parameters(), lr=opt.lr)
-    if opt.use_gpu:
+    if opt.execution_mode == ExecutionMode.cuda_rpc:
         # local_model.cuda()
         local_model.to(device)
     local_model.train()
     state = torch.from_numpy(env.reset())
-    if opt.use_gpu:
+    if opt.execution_mode == ExecutionMode.cuda_rpc:
         # state = state.cuda()
         state = state.to(device)
     done = True
     curr_episode = 0
     while True:
-        if log:
-            if curr_episode and curr_episode % opt.save_interval == 0:
-                torch.save(global_model.state_dict(),
-                           "{}/a3c_super_mario_bros_{}_{}_ep{}".format(opt.saved_path, opt.world, opt.stage, curr_episode))
-            # if curr_episode % 10 == 0:
-            #     print("Process {}. Episode {}".format(index, curr_episode))
         curr_episode += 1
         # tic = timeit.default_timer()
         # pickle.dumps(global_model.state_dict())
@@ -101,8 +119,14 @@ def local_train(rank, opt, log=False):
         # print(f"time: {toc - tic}")
 
         # Reset to global network
-        global_state_dict = torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), get_global_model_state_dict)
+        global_state_dict, delay = rpc_load_global(opt.execution_mode)
         local_model.load_state_dict(global_state_dict)
+
+        if log_dir:
+            log_writer.add_scalar(f"Train_{rank}/LoadGlobalModelDelay", delay, curr_episode)
+            if curr_episode and curr_episode % opt.save_interval == 0:
+                torch.save(global_state_dict,
+                           f"{log_dir}/model_{opt.world}_{opt.stage,}_ep{curr_episode}")
 
         if done:
             h_0 = torch.zeros((1, 512), dtype=torch.float)
@@ -110,7 +134,7 @@ def local_train(rank, opt, log=False):
         else:
             h_0 = h_0.detach()
             c_0 = c_0.detach()
-        if opt.use_gpu:
+        if opt.execution_mode == ExecutionMode.cuda_rpc:
             # h_0 = h_0.cuda()
             h_0 = h_0.to(device)
             # c_0 = c_0.cuda()
@@ -133,7 +157,7 @@ def local_train(rank, opt, log=False):
 
             state, reward, done, _ = env.step(action)
             state = torch.from_numpy(state)
-            if opt.use_gpu:
+            if opt.execution_mode == ExecutionMode.cuda_rpc:
                 # state = state.cuda()
                 state = state.to(device)
 
@@ -144,20 +168,20 @@ def local_train(rank, opt, log=False):
 
             if done:
                 state = torch.from_numpy(env.reset())
-                if opt.use_gpu:
+                if opt.execution_mode == ExecutionMode.cuda_rpc:
                     # state = state.cuda()
                     state = state.to(device)
                 break
 
         R = torch.zeros((1, 1), dtype=torch.float)
-        if opt.use_gpu:
+        if opt.execution_mode == ExecutionMode.cuda_rpc:
             # R = R.cuda()
             R = R.to(device)
         if not done:
             _, R, _, _ = local_model(state, h_0, c_0)
 
         gae = torch.zeros((1, 1), dtype=torch.float)
-        if opt.use_gpu:
+        if opt.execution_mode == ExecutionMode.cuda_rpc:
             # gae = gae.cuda()
             gae = gae.to(device)
         actor_loss = 0
@@ -175,8 +199,8 @@ def local_train(rank, opt, log=False):
             entropy_loss = entropy_loss + entropy
 
         total_loss = -actor_loss + critic_loss - opt.beta * entropy_loss
-        if log_writer:
-            record(log_writer, rank, curr_episode, sum(rewards), total_loss)
+        if log_dir:
+            record(log_writer, log_dir, rank, curr_episode, sum(rewards), total_loss)
         # print(f"{index}, ep:{curr_episode}, loss:{total_loss}")
 
         # perform backward locally
@@ -192,8 +216,8 @@ def local_train(rank, opt, log=False):
             print('The code runs for %.2f s ' % (end_time - start_time))
             return
 
-def record(writer, rank, curr_episode, total_reward, total_loss):
-    writer.add_scalar(f"Train_{rank}/Reward", total_reward, curr_episode)
-    writer.add_scalar(f"Train_{rank}/Loss", total_loss, curr_episode)
-    with open("output.txt", "a+") as f:
+def record(log_writer, log_dir, rank, curr_episode, total_reward, total_loss):
+    log_writer.add_scalar(f"Train_{rank}/Reward", total_reward, curr_episode)
+    log_writer.add_scalar(f"Train_{rank}/Loss", total_loss, curr_episode)
+    with open(f"{log_dir}/output.txt", "a+") as f:
         f.write(f"{datetime.datetime.now()} Process {rank}. Episode {curr_episode}. Reward: {total_reward}. Loss: {total_loss.item()}\n")
