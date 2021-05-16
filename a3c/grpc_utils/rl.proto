@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+// The document of proto3: https://developers.google.com/protocol-buffers/docs/proto3
+
+// Package name definition, which can be omitted in Python.
+package rl;
+
+// pack everything into a bytes
+message Request {
+    bytes data = 1;
+}
+
+message Response {
+    bytes data = 1;
+}
+
+service RL_GRPC {
+    rpc get_global_model_state_dict (Request) returns (Response);
+    rpc update_global_model_parameters (Request) returns (Response);
+}

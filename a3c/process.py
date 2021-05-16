@@ -40,23 +40,25 @@ def initialize_global_model(opt, rank):
         device = torch.device("cpu")
     _, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
     global_model = ActorCritic(num_states, num_actions)
-    global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
     print(f"Global model on {device}")
     global_model.to(device)
+    global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
 
 def get_global_model_state_dict():
     global global_model, global_rank
     # print("in get_global_model_state_dict")
     return global_model.state_dict()
 
-def update_global_model_parameters(local_model):
+def update_global_model_parameters(gradients):
     global global_model, global_optimizer, global_rank
     # print("in update_global_model_parameters")
     global_optimizer.zero_grad()
-    for local_param, global_param in zip(local_model.parameters(), global_model.parameters()):
-        if global_param.grad is not None:
-            break
-        global_param._grad = local_param.grad
+    for grad, global_param in zip(gradients, global_model.parameters()):
+        # print(global_param.grad, global_param._grad)
+        # if global_param.grad is not None:
+        #     print("break early")
+        #     break
+        global_param.grad = grad
     global_optimizer.step()
 
 WORKER_NAME = "worker{}"
@@ -100,15 +102,9 @@ def local_train(rank, opt, log_dir):
     if log_dir:
         log_writer = SummaryWriter(log_dir)
     local_model = ActorCritic(num_states, num_actions)
-    optimizer = GlobalAdam(local_model.parameters(), lr=opt.lr)
-    if opt.execution_mode == ExecutionMode.cuda_rpc:
-        # local_model.cuda()
-        local_model.to(device)
+    local_model.to(device)
     local_model.train()
-    state = torch.from_numpy(env.reset())
-    if opt.execution_mode == ExecutionMode.cuda_rpc:
-        # state = state.cuda()
-        state = state.to(device)
+    state = torch.from_numpy(env.reset()).to(device)
     done = True
     curr_episode = 0
     while True:
@@ -126,7 +122,7 @@ def local_train(rank, opt, log_dir):
             log_writer.add_scalar(f"Train_{rank}/LoadGlobalModelDelay", delay, curr_episode)
             if curr_episode and curr_episode % opt.save_interval == 0:
                 torch.save(global_state_dict,
-                           f"{log_dir}/model_{opt.world}_{opt.stage,}_ep{curr_episode}")
+                           f"{log_dir}/model_{opt.world}_{opt.stage}_ep{curr_episode}")
 
         if done:
             h_0 = torch.zeros((1, 512), dtype=torch.float)
@@ -204,16 +200,19 @@ def local_train(rank, opt, log_dir):
         # print(f"{index}, ep:{curr_episode}, loss:{total_loss}")
 
         # perform backward locally
-        optimizer.zero_grad()
+        local_model.zero_grad()
         total_loss.backward()
+        gradients = []
+        for param in local_model.parameters():
+            gradients.append(param.grad)
         # update global parameters
-        torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), update_global_model_parameters, args=(local_model,))
+        torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), update_global_model_parameters, args=(gradients,))
         # print(f"{index} finished step")
 
         if curr_episode == opt.num_episodes:
             # print("Training process {} terminated".format(index))
             end_time = timeit.default_timer()
-            print('The code runs for %.2f s ' % (end_time - start_time))
+            print(f"Worker {rank} ran for {curr_episode} in {end_time - start_time}s")
             return
 
 def record(log_writer, log_dir, rank, curr_episode, total_reward, total_loss):
