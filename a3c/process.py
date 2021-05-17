@@ -3,96 +3,22 @@ from env import create_train_env
 from model import ActorCritic
 import torch.nn.functional as F
 from torch.distributions import Categorical
-from optimizer import GlobalAdam
 
-from collections import deque
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 import timeit
-import pickle
 import itertools
-import statistics
-import torch.distributed.rpc as rpc
-from enum import Enum
-import time
-
-class ExecutionMode(Enum):
-    grpc = "grpc"
-    cpu_rpc = "cpu_rpc"
-    cuda_rpc = "cuda_rpc"
-    cuda_rpc_with_batch = "cuda_rpc_with_batch"
-
-    def __str__(self):
-        return self.value
-
-    def __repr__(self):
-        return str(self)
-
-global_rank = None
-global_model = None
-global_optimizer = None
-def initialize_global_model(opt, rank):
-    global global_model, global_optimizer, global_rank
-    global_rank = rank
-    if opt.execution_mode == ExecutionMode.cuda_rpc:
-        device = torch.device("cuda:{}".format(global_rank))
-    else:
-        device = torch.device("cpu")
-    _, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
-    global_model = ActorCritic(num_states, num_actions)
-    print(f"Global model on {device}")
-    global_model.to(device)
-    global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
-
-def get_global_model_state_dict():
-    global global_model, global_rank
-    # print("in get_global_model_state_dict")
-    return global_model.state_dict()
-
-def update_global_model_parameters(gradients):
-    global global_model, global_optimizer, global_rank
-    # print("in update_global_model_parameters")
-    global_optimizer.zero_grad()
-    for grad, global_param in zip(gradients, global_model.parameters()):
-        # print(global_param.grad, global_param._grad)
-        # if global_param.grad is not None:
-        #     print("break early")
-        #     break
-        global_param.grad = grad
-    global_optimizer.step()
-
-WORKER_NAME = "worker{}"
-def stamp_time(cuda=False):
-    if cuda:
-        event = torch.cuda.Event(enable_timing=True)
-        event.record()
-        return event
-    else:
-        return time.time()
-
-def compute_delay(ts, cuda=False):
-    if cuda:
-        torch.cuda.synchronize()
-        return ts["tik"].elapsed_time(ts["tok"]) / 1e3
-    else:
-        return ts["tok"] - ts["tik"]
-
-def rpc_load_global(execution_mode):
-    if execution_mode in (ExecutionMode.cuda_rpc, ExecutionMode.cpu_rpc):
-        ts = {}
-        cuda = execution_mode == ExecutionMode.cuda_rpc
-        ts["tik"] = stamp_time(cuda)
-        global_state_dict = torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), get_global_model_state_dict)
-        ts["tok"] = stamp_time(cuda)
-        delay = compute_delay(ts, cuda)
-    return global_state_dict, delay
-
-def rpc_update_global(local_model_parameters):
-    pass
+from global_network import init_grpc_client, rpc_load_global, rpc_update_global
+from execution_mode import ExecutionMode
 
 def local_train(rank, opt, log_dir):
     torch.manual_seed(123 + rank)
     start_time = timeit.default_timer()
+    if opt.execution_mode == ExecutionMode.grpc:
+        grpc_stub = init_grpc_client()
+    else:
+        grpc_stub = None
+
     env, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
     if opt.execution_mode == ExecutionMode.cuda_rpc:
         device = torch.device("cuda:{}".format(rank))
@@ -109,13 +35,9 @@ def local_train(rank, opt, log_dir):
     curr_episode = 0
     while True:
         curr_episode += 1
-        # tic = timeit.default_timer()
-        # pickle.dumps(global_model.state_dict())
-        # dumped = toc = timeit.default_timer()
-        # print(f"time: {toc - tic}")
 
         # Reset to global network
-        global_state_dict, delay = rpc_load_global(opt.execution_mode)
+        global_state_dict, delay = rpc_load_global(opt.execution_mode, grpc_stub)
         local_model.load_state_dict(global_state_dict)
 
         if log_dir:
@@ -197,17 +119,16 @@ def local_train(rank, opt, log_dir):
         total_loss = -actor_loss + critic_loss - opt.beta * entropy_loss
         if log_dir:
             record(log_writer, log_dir, rank, curr_episode, sum(rewards), total_loss)
-        # print(f"{index}, ep:{curr_episode}, loss:{total_loss}")
 
         # perform backward locally
         local_model.zero_grad()
         total_loss.backward()
+        
+        # update global parameters
         gradients = []
         for param in local_model.parameters():
             gradients.append(param.grad)
-        # update global parameters
-        torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), update_global_model_parameters, args=(gradients,))
-        # print(f"{index} finished step")
+        rpc_update_global(opt.execution_mode, gradients, grpc_stub)
 
         if curr_episode == opt.num_episodes:
             # print("Training process {} terminated".format(index))

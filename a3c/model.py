@@ -11,6 +11,7 @@ class ActorCritic(nn.Module):
         self.critic_linear = nn.Linear(512, 1)
         self.actor_linear = nn.Linear(512, num_actions)
         self._initialize_weights()
+
     def _initialize_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
@@ -20,6 +21,7 @@ class ActorCritic(nn.Module):
             elif isinstance(module, nn.LSTMCell):
                 nn.init.constant_(module.bias_ih, 0)
                 nn.init.constant_(module.bias_hh, 0)
+
     def forward(self, x, hx, cx):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -27,10 +29,3 @@ class ActorCritic(nn.Module):
         x = F.relu(self.conv4(x))
         hx, cx = self.lstm(x.view(x.size(0), -1), (hx, cx))
         return self.actor_linear(hx), self.critic_linear(hx), hx, cx
-
-# model = ActorCritic(84*84*4, 2)
-# print(model.parameters())
-# for p in model.parameters():
-#     print(p.shape)
-# pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-# print(f"{pytorch_total_params=}")

@@ -1,3 +1,13 @@
-https://github.com/uvipen/Super-mario-bros-A3C-pytorch
+actor critic code based off of https://github.com/uvipen/Super-mario-bros-A3C-pytorch
 
-python train.py --num_processes=2 --num_global_steps=500
+grpc:
+
+python main.py --world_size=2 --execution_mode=grpc
+
+cpu rpc:
+
+python main.py --world_size=2 --execution_mode=cpu_rpc
+
+cuda rpc:
+
+python main.py --world_size=2 --execution_mode=cuda_rpc
