@@ -2,23 +2,18 @@
 
 #SBATCH --job-name=rl_rpc
 
-#SBATCH --partition=q3
+#SBATCH --partition=q1
 
 #SBATCH --nodes=1
 
 #SBATCH --ntasks-per-node=1
 
-#SBATCH --cpus-per-node=8
-
-#SBATCH --cpus-per-task=8
-
-#SBATCH --gpus-per-node=8
-
-#SBATCH --gpus-per-task=8
+#SBATCH --cpus-per-task=96
 
 #SBATCH --time=5:00:00
 
-# Run sbatch ./scripts/sbatch.sh <script_name>
+# 1. Activate environment
+# 2. Run sbatch ./scripts/sbatch.sh <script_name>
 # e.g. sbatch ./scripts/sbatch.sh ./scripts/cuda_rpc.sh
 if [ -e $1 ];
 then

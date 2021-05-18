@@ -44,7 +44,7 @@ class Servicer(rl_pb2_grpc.RL_GRPCServicer):
         gradients = pickle.loads(request.data)
         global_model.zero_grad()
         for grad, global_param in zip(gradients, global_model.parameters()):
-            global_param._grad = grad
+            global_param.grad = grad
         global_optimizer.step()
         response = rl_pb2.Response(data=None)
         return response
