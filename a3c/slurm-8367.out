@@ -1,4 +1,0 @@
-Executing ./scripts/cuda_rpc.sh with slurm batch.
-srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
-slurmstepd: error: *** JOB 8367 ON q3-dy-p3dn24xlarge-15 CANCELLED AT 2021-05-18T04:11:54 DUE TO TIME LIMIT ***
-0: slurmstepd: error: *** STEP 8367.0 ON q3-dy-p3dn24xlarge-15 CANCELLED AT 2021-05-18T04:11:54 DUE TO TIME LIMIT ***
