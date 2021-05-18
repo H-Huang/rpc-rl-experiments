@@ -14,6 +14,16 @@ sys.path.append(os.path.join(pathlib.Path(__file__).parent.absolute(), "grpc_uti
 from grpc_utils import rl_pb2
 from grpc_utils import rl_pb2_grpc
 
+class GlobalAdam(torch.optim.Adam):
+    def __init__(self, params, lr):
+        super(GlobalAdam, self).__init__(params, lr=lr)
+        for group in self.param_groups:
+            for p in group['params']:
+                state = self.state[p]
+                state['step'] = 0
+                state['exp_avg'] = torch.zeros_like(p.data)
+                state['exp_avg_sq'] = torch.zeros_like(p.data)
+
 global_rank = None
 global_model = None
 global_optimizer = None
@@ -66,7 +76,7 @@ def initialize_global_model(opt, rank):
     global_model = ActorCritic(num_states, num_actions)
     print(f"Global model on {device}")
     global_model.to(device)
-    global_optimizer = torch.optim.Adam(global_model.parameters(), lr=opt.lr)
+    global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
 
 def get_global_model_state_dict():
     global global_model, global_rank
