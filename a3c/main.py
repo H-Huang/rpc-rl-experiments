@@ -19,7 +19,7 @@ def get_args():
     parser.add_argument('--tau', type=float, default=1.0, help='parameter for GAE')
     parser.add_argument('--beta', type=float, default=0.01, help='entropy coefficient')
     parser.add_argument("--num_episodes", type=int, default=50000)
-    parser.add_argument("--save_interval", type=int, default=5000, help="Number of episodes between savings")
+    parser.add_argument("--save_interval", type=int, default=1000, help="Number of episodes between savings")
     parser.add_argument("--world_size", type=int, default=2)
     parser.add_argument("--execution_mode", type=ExecutionMode, choices=list(ExecutionMode), default=ExecutionMode.cpu_rpc)
     args = parser.parse_args()
