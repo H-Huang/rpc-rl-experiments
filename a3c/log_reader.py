@@ -1,6 +1,7 @@
 from tensorboard.backend.event_processing import event_accumulator
 import statistics
 import numpy as np
+import collections
 
 # ea = event_accumulator.EventAccumulator("./runs/May14_20-39-27_q2-st-p38xlarge-1/events.out.tfevents.1621024767.q2-st-p38xlarge-1",
 #             size_guidance={ 
@@ -50,19 +51,31 @@ def process_logs(files):
 
         # skip beginning data points due to warm up
         skip_count = 100
-        scalars = ea.Scalars(load_model_delay)[skip_count:]
+        delay_scalars = ea.Scalars(load_model_delay)[skip_count:]
 
         values = []
-        for scalar in scalars:
+        for scalar in delay_scalars:
             values.append(scalar.value)
         mean, stdev = get_stats(values)
         
         print(experiment, mean, stdev)
-        time_to_converge(values)
 
-def time_to_converge(values):
+        reward_scalars = ea.Scalars(reward_metric_name)[skip_count:]
+        wall_time, step = time_to_converge(reward_scalars)
+        print(wall_time, step)
+
+def time_to_converge(scalars):
     # determine convergence threshold to be 
+    threshold = 675
+    deque = collections.deque(maxlen=100)
+    for scalar in scalars:
+        value = scalar.value
+        deque.append(value)
+        avg = statistics.mean(deque)
+        if avg >= threshold:
+            return scalar.wall_time, scalar.step
     print("did not converge")
+    return None, None
 
 if __name__ == "__main__":
     files = {

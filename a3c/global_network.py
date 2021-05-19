@@ -24,9 +24,9 @@ class GlobalAdam(torch.optim.Adam):
                 state['exp_avg'] = torch.zeros_like(p.data)
                 state['exp_avg_sq'] = torch.zeros_like(p.data)
 
-global_rank = None
 global_model = None
 global_optimizer = None
+global_device = None
 
 # ========== GRPC ==========
 MAX_MESSAGE_LENGTH = 2**30
@@ -44,6 +44,7 @@ class Servicer(rl_pb2_grpc.RL_GRPCServicer):
         gradients = pickle.loads(request.data)
         global_model.zero_grad()
         for grad, global_param in zip(gradients, global_model.parameters()):
+            grad = grad.to(global_device)
             global_param.grad = grad
         global_optimizer.step()
         response = rl_pb2.Response(data=None)
@@ -66,32 +67,25 @@ def init_grpc_client():
 
 # ========== Pytorch RPC ==========
 def initialize_global_model(opt, rank):
-    global global_model, global_optimizer, global_rank
-    global_rank = rank
+    global global_model, global_optimizer, global_device
     if opt.execution_mode == ExecutionMode.cuda_rpc:
-        device = torch.device("cuda:{}".format(global_rank))
+        global_device = torch.device("cuda:{}".format(rank))
     else:
-        device = torch.device("cpu")
+        global_device = torch.device("cpu")
     _, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
     global_model = ActorCritic(num_states, num_actions)
-    print(f"Global model on {device}")
-    global_model.to(device)
+    print(f"Global model on {global_device}")
+    global_model.to(global_device)
     global_optimizer = GlobalAdam(global_model.parameters(), lr=opt.lr)
 
-def get_global_model_state_dict():
-    global global_model, global_rank
-    # print("in get_global_model_state_dict")
+def get_global_model_state_dict(execution_mode):
+    global global_model
     return global_model.state_dict()
 
 def update_global_model_parameters(gradients):
-    global global_model, global_optimizer, global_rank
-    # print("in update_global_model_parameters")
+    global global_model, global_optimizer
     global_optimizer.zero_grad()
     for grad, global_param in zip(gradients, global_model.parameters()):
-        # print(global_param.grad, global_param._grad)
-        # if global_param.grad is not None:
-        #     print("break early")
-        #     break
         global_param.grad = grad
     global_optimizer.step()
 
@@ -117,7 +111,7 @@ def rpc_load_global(execution_mode, grpc_stub=None):
         cuda = execution_mode == ExecutionMode.cuda_rpc
         ts = {}
         ts["tik"] = stamp_time(cuda)
-        globel_model_state_dict = torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), get_global_model_state_dict)
+        globel_model_state_dict = torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), get_global_model_state_dict, args=(execution_mode,))
         ts["tok"] = stamp_time(cuda)
         delay = compute_delay(ts, cuda)
     elif execution_mode == ExecutionMode.grpc:

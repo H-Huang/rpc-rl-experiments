@@ -20,7 +20,7 @@ def local_train(rank, opt, log_dir):
         grpc_stub = None
 
     env, num_states, num_actions = create_train_env(opt.world, opt.stage, opt.action_type)
-    if opt.execution_mode == ExecutionMode.cuda_rpc:
+    if opt.use_gpu:
         device = torch.device("cuda:{}".format(rank))
     else:
         device = torch.device("cpu")
@@ -52,11 +52,8 @@ def local_train(rank, opt, log_dir):
         else:
             h_0 = h_0.detach()
             c_0 = c_0.detach()
-        if opt.execution_mode == ExecutionMode.cuda_rpc:
-            # h_0 = h_0.cuda()
-            h_0 = h_0.to(device)
-            # c_0 = c_0.cuda()
-            c_0 = c_0.to(device)
+        h_0 = h_0.to(device)
+        c_0 = c_0.to(device)
 
         log_policies = []
         values = []
@@ -75,9 +72,7 @@ def local_train(rank, opt, log_dir):
 
             state, reward, done, _ = env.step(action)
             state = torch.from_numpy(state)
-            if opt.execution_mode == ExecutionMode.cuda_rpc:
-                # state = state.cuda()
-                state = state.to(device)
+            state = state.to(device)
 
             values.append(value)
             log_policies.append(log_policy[0, action])
@@ -86,22 +81,16 @@ def local_train(rank, opt, log_dir):
 
             if done:
                 state = torch.from_numpy(env.reset())
-                if opt.execution_mode == ExecutionMode.cuda_rpc:
-                    # state = state.cuda()
-                    state = state.to(device)
+                state = state.to(device)
                 break
 
         R = torch.zeros((1, 1), dtype=torch.float)
-        if opt.execution_mode == ExecutionMode.cuda_rpc:
-            # R = R.cuda()
-            R = R.to(device)
+        R = R.to(device)
         if not done:
             _, R, _, _ = local_model(state, h_0, c_0)
 
         gae = torch.zeros((1, 1), dtype=torch.float)
-        if opt.execution_mode == ExecutionMode.cuda_rpc:
-            # gae = gae.cuda()
-            gae = gae.to(device)
+        gae = gae.to(device)
         actor_loss = 0
         critic_loss = 0
         entropy_loss = 0
@@ -127,7 +116,10 @@ def local_train(rank, opt, log_dir):
         # update global parameters
         gradients = []
         for param in local_model.parameters():
-            gradients.append(param.grad)
+            if opt.execution_mode == ExecutionMode.cuda_rpc:
+                gradients.append(param.grad)
+            else:
+                gradients.append(param.grad.cpu())
         rpc_update_global(opt.execution_mode, gradients, grpc_stub)
 
         if curr_episode == opt.num_episodes:
