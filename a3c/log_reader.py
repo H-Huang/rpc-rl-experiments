@@ -80,7 +80,8 @@ def time_to_converge(scalars):
 if __name__ == "__main__":
     files = {
         "cuda_rpc_8": "2021-05-18_14:21:41_cuda_rpc_8/events.out.tfevents.1621347702.q3-dy-p3dn24xlarge-2.73506.0",
-        "cpu_rpc_2": "2021-05-16_19:39:42_cpu_rpc_2/events.out.tfevents.1621193983.q2-dy-p38xlarge-1.7796.0",
+        "cpu_rpc_8": "2021-05-20_04:44:49_cpu_rpc_8/events.out.tfevents.1621485890.q3-dy-p3dn24xlarge-1.11863.0",
+        "grpc_8": "2021-05-19_19:32:04_grpc_8/events.out.tfevents.1621452724.q3-dy-p3dn24xlarge-2.10359.0",
         "grpc_2": "2021-05-16_19:33:13_grpc_2/events.out.tfevents.1621193594.q2-st-p38xlarge-1.10435.0",
     }
     process_logs(files)

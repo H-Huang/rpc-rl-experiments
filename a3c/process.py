@@ -34,14 +34,15 @@ def local_train(rank, opt, log_dir):
     done = True
     curr_episode = 0
     while True:
+        episode_start_time = timeit.default_timer()
         curr_episode += 1
 
         # Reset to global network
-        global_state_dict, delay = rpc_load_global(opt.execution_mode, grpc_stub)
+        global_state_dict, fetch_model_delay = rpc_load_global(opt.execution_mode, grpc_stub)
         local_model.load_state_dict(global_state_dict)
 
         if log_dir:
-            log_writer.add_scalar(f"Train_{rank}/LoadGlobalModelDelay", delay, curr_episode)
+            log_writer.add_scalar(f"Train_{rank}/FetchModelDelay", fetch_model_delay, curr_episode)
             if curr_episode and curr_episode % opt.save_interval == 0:
                 torch.save(global_state_dict,
                            f"{log_dir}/model_{opt.world}_{opt.stage}_ep{curr_episode}")
@@ -120,7 +121,13 @@ def local_train(rank, opt, log_dir):
                 gradients.append(param.grad)
             else:
                 gradients.append(param.grad.cpu())
-        rpc_update_global(opt.execution_mode, gradients, grpc_stub)
+        update_model_delay = rpc_update_global(opt.execution_mode, gradients, grpc_stub)
+        if log_dir:
+            log_writer.add_scalar(f"Train_{rank}/UpdateModel", update_model_delay, curr_episode)
+
+        episode_end_time = timeit.default_timer()
+        if log_dir:
+            log_writer.add_scalar(f"Train_{rank}/PerEpisodeTime", episode_end_time - episode_start_time, curr_episode)
 
         if curr_episode == opt.num_episodes:
             # print("Training process {} terminated".format(index))

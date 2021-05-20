@@ -126,8 +126,19 @@ def rpc_load_global(execution_mode, grpc_stub=None):
     return globel_model_state_dict, delay
 
 def rpc_update_global(execution_mode, gradients, grpc_stub=None):
-    if execution_mode != ExecutionMode.grpc:
+    if execution_mode in (ExecutionMode.cuda_rpc, ExecutionMode.cpu_rpc):
+        cuda = execution_mode == ExecutionMode.cuda_rpc
+        ts = {}
+        ts["tik"] = stamp_time(cuda)
         torch.distributed.rpc.rpc_sync(WORKER_NAME.format(0), update_global_model_parameters, args=(gradients,))
-    else:
+        ts["tok"] = stamp_time(cuda)
+        delay = compute_delay(ts, cuda)
+    elif execution_mode == ExecutionMode.grpc:
+        assert grpc_stub != None
+        ts = {}
+        ts["tik"] = stamp_time()
         request = rl_pb2.Request(data=pickle.dumps(gradients))
         grpc_stub.update_global_model_parameters(request)
+        ts["tok"] = stamp_time()
+        delay = compute_delay(ts)
+    return delay
