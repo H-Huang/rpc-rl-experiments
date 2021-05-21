@@ -1,0 +1,12 @@
+world: 1
+stage: 1
+action_type: right
+lr: 0.0001
+gamma: 0.9
+tau: 1.0
+beta: 0.01
+save_interval: 1000
+use_gpu: True
+num_episodes: 100
+world_size: 6
+execution_mode: grpc

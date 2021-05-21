@@ -23,13 +23,14 @@ def get_args():
     parser.add_argument("--num_episodes", type=int, default=50000)
     parser.add_argument("--world_size", type=int, default=2)
     parser.add_argument("--execution_mode", type=ExecutionMode, choices=list(ExecutionMode), default=ExecutionMode.cpu_rpc)
+    parser.add_argument("--master_addr", type=str, default="localhost")
     args = parser.parse_args()
     return args
 
 def run_worker(rank, opt):
     # https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution
     # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_ADDR"] = opt.master_addr
     os.environ["MASTER_PORT"] = "29501"
     WORKER_NAME = "worker{}"
     print(f"Rank {rank} start")
