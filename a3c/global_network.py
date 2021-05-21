@@ -30,7 +30,7 @@ global_device = None
 
 # ========== GRPC ==========
 MAX_MESSAGE_LENGTH = 2**30
-SERVER_ADDRESS = 'localhost:29506'
+SERVER_ADDRESS = '{}:29506'
 class Servicer(rl_pb2_grpc.RL_GRPCServicer):
     def __init__(self):
         pass
@@ -50,12 +50,12 @@ class Servicer(rl_pb2_grpc.RL_GRPCServicer):
         response = rl_pb2.Response(data=None)
         return response
 
-def init_grpc_server():
+def init_grpc_server(master_addr):
     server = grpc.server(futures.ThreadPoolExecutor(), options=[('grpc.max_message_length', MAX_MESSAGE_LENGTH),
         ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
         ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)])
     rl_pb2_grpc.add_RL_GRPCServicer_to_server(Servicer(), server)
-    server.add_insecure_port(SERVER_ADDRESS)
+    server.add_insecure_port(SERVER_ADDRESS.format(master_addr))
     server.start()
     return server
 

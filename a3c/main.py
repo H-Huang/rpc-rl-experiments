@@ -24,6 +24,8 @@ def get_args():
     parser.add_argument("--world_size", type=int, default=2)
     parser.add_argument("--execution_mode", type=ExecutionMode, choices=list(ExecutionMode), default=ExecutionMode.cpu_rpc)
     parser.add_argument("--master_addr", type=str, default="localhost")
+    parser.add_argument('--rank', type=int, default=None,
+                    help="Global rank of this process. Pass in 0 for master.")
     args = parser.parse_args()
     return args
 
@@ -40,7 +42,7 @@ def run_worker(rank, opt):
         if opt.execution_mode != ExecutionMode.grpc:
             rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=opt.world_size)
         else:
-            grpc_server = init_grpc_server()
+            grpc_server = init_grpc_server(opt.master_addr)
             grpc_server.wait_for_termination()
     else:
         # other ranks will train on local model and update global
@@ -48,7 +50,8 @@ def run_worker(rank, opt):
             options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=128)
             if opt.execution_mode == ExecutionMode.cuda_rpc:
                 mapping = {}
-                mapping[rank] = 0
+                num_gpus_per_node = 8
+                mapping[rank % num_gpus_per_node] = 0
                 print(f"Setting device_map for Rank {rank} - {mapping}")
                 options.set_device_map(WORKER_NAME.format(0), mapping)
             rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=opt.world_size, rpc_backend_options=options)
@@ -74,9 +77,14 @@ def run_worker(rank, opt):
 
 if __name__ == "__main__":
     opt = get_args()
-    mp.spawn(
-        run_worker,
-        args=(opt,),
-        nprocs=opt.world_size,
-        join=True,
-    )
+
+    if opt.rank is None:
+        mp.spawn(
+            run_worker,
+            args=(opt,),
+            nprocs=opt.world_size,
+            join=True,
+        )
+    else:
+        # running on slurm
+        run_worker(opt.rank, opt)

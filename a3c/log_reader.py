@@ -3,24 +3,6 @@ import statistics
 import numpy as np
 import collections
 
-# ea = event_accumulator.EventAccumulator("./runs/May14_20-39-27_q2-st-p38xlarge-1/events.out.tfevents.1621024767.q2-st-p38xlarge-1",
-#             size_guidance={ 
-#             event_accumulator.IMAGES: 4,
-#             event_accumulator.AUDIO: 4,
-#             event_accumulator.SCALARS: 0,
-#             event_accumulator.HISTOGRAMS: 1,
-#         })
-# ea.Reload()
-
-# print(ea.Tags())
-
-# loss_metric_name = 'Train_0/Loss'
-# reward_metric_name = 'Train_0/Reward'
-
-# print(len(ea.Scalars(loss_metric_name)))
-# print(ea.Scalars(reward_metric_name)[0])
-# # file_name = "May14_20-39-27_q2-st-p38xlarge-1/events.out.tfevents.1621024767.q2-st-p38xlarge-1"
-
 def get_stats(values):
     mean = statistics.mean(values)
     stdev = statistics.stdev(values)
@@ -80,7 +62,7 @@ def calculate_rewards(files):
                 event_accumulator.HISTOGRAMS: 1,
             })
         ea.Reload()
-        # only take last 500 episodes at end of training
+        # only take last 300 episodes
         reward_scalars = ea.Scalars(reward_metric_name)[-300:]
         reward_values = []
         for scalar in reward_scalars:
@@ -104,14 +86,10 @@ def time_to_converge(scalars):
 if __name__ == "__main__":
     reward_files = {
         "cuda_rpc_8": "2021-05-18_14:21:41_cuda_rpc_8/events.out.tfevents.1621347702.q3-dy-p3dn24xlarge-2.73506.0",
-        "cpu_rpc_8": "2021-05-20_04:44:49_cpu_rpc_8/events.out.tfevents.1621485890.q3-dy-p3dn24xlarge-1.11863.0",
+        "cpu_rpc_8": "2021-05-20_05:22:31_cpu_rpc_8/events.out.tfevents.1621574552.q3-dy-p3dn24xlarge-15.88635.0",
         "grpc_8": "2021-05-20_16:06:39_grpc_8/events.out.tfevents.1621526799.q3-dy-p3dn24xlarge-1.62428.0",
     }
     files = {
-        # "cuda_rpc_8": "2021-05-18_14:21:41_cuda_rpc_8/events.out.tfevents.1621347702.q3-dy-p3dn24xlarge-2.73506.0",
-        # "cpu_rpc_8": "2021-05-20_04:44:49_cpu_rpc_8/events.out.tfevents.1621485890.q3-dy-p3dn24xlarge-1.11863.0",
-        # "grpc_8": "2021-05-19_19:32:04_grpc_8/events.out.tfevents.1621452724.q3-dy-p3dn24xlarge-2.10359.0",
-        # "grpc_2": "2021-05-16_19:33:13_grpc_2/events.out.tfevents.1621193594.q2-st-p38xlarge-1.10435.0",
         # trainrun python main.py --world_size=NUM --execution_mode=grpc --num_episodes=100 
         "grpc_2": "2021-05-20_21:31:28_grpc_2/events.out.tfevents.1621546288.q3-dy-p3dn24xlarge-2.33315.0",
         "grpc_4": "2021-05-20_21:38:23_grpc_4/events.out.tfevents.1621546704.q3-dy-p3dn24xlarge-2.36666.0",
@@ -128,5 +106,5 @@ if __name__ == "__main__":
         "cuda_rpc_6": "2021-05-20_22:37:41_cuda_rpc_6/events.out.tfevents.1621550261.q3-dy-p3dn24xlarge-1.45580.0",
         "cuda_rpc_8": "2021-05-20_22:44:10_cuda_rpc_8/events.out.tfevents.1621550650.q3-dy-p3dn24xlarge-1.50833.0",
     }
-    # calculate_rewards(reward_files)
-    process_logs(files)
+    calculate_rewards(reward_files)
+    # process_logs(files)
