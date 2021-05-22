@@ -15,7 +15,7 @@ def local_train(rank, opt, log_dir):
     torch.manual_seed(123 + rank)
     start_time = timeit.default_timer()
     if opt.execution_mode == ExecutionMode.grpc:
-        grpc_stub = init_grpc_client()
+        grpc_stub = init_grpc_client(opt.master_addr)
     else:
         grpc_stub = None
 

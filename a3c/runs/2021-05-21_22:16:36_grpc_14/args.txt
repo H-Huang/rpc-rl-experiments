@@ -1,0 +1,14 @@
+world: 1
+stage: 1
+action_type: right
+lr: 0.0001
+gamma: 0.9
+tau: 1.0
+beta: 0.01
+save_interval: 1000
+use_gpu: True
+num_episodes: 100
+world_size: 14
+execution_mode: grpc
+master_addr: q3-dy-p3dn24xlarge-2
+rank: 1

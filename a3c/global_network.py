@@ -59,8 +59,8 @@ def init_grpc_server(master_addr):
     server.start()
     return server
 
-def init_grpc_client():
-    channel = grpc.insecure_channel(SERVER_ADDRESS, options=[('grpc.max_message_length', MAX_MESSAGE_LENGTH),
+def init_grpc_client(master_addr):
+    channel = grpc.insecure_channel(SERVER_ADDRESS.format(master_addr), options=[('grpc.max_message_length', MAX_MESSAGE_LENGTH),
         ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
         ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)])
     return rl_pb2_grpc.RL_GRPCStub(channel)

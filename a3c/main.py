@@ -29,7 +29,7 @@ def get_args():
     args = parser.parse_args()
     return args
 
-def run_worker(rank, opt):
+def run_worker(rank, opt, local_rank=None):
     # https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution
     # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ["MASTER_ADDR"] = opt.master_addr
@@ -50,8 +50,10 @@ def run_worker(rank, opt):
             options = rpc.TensorPipeRpcBackendOptions(num_worker_threads=128)
             if opt.execution_mode == ExecutionMode.cuda_rpc:
                 mapping = {}
-                num_gpus_per_node = 8
-                mapping[rank % num_gpus_per_node] = 0
+                if local_rank is not None:
+                    mapping[local_rank] = 0
+                else:
+                    mapping[rank] = 0
                 print(f"Setting device_map for Rank {rank} - {mapping}")
                 options.set_device_map(WORKER_NAME.format(0), mapping)
             rpc.init_rpc(WORKER_NAME.format(rank), rank=rank, world_size=opt.world_size, rpc_backend_options=options)
@@ -68,7 +70,12 @@ def run_worker(rank, opt):
                     f.write(f"{key}: {val}\n")
         else:
             log_dir = None
-        local_train(rank, opt, log_dir)
+
+        if local_rank is not None:
+            # multi-node
+            local_train(local_rank, opt, log_dir)
+        else:
+            local_train(rank, opt, log_dir)
 
     # block until all rpcs finish, and shutdown the RPC instance
     if opt.execution_mode != ExecutionMode.grpc:
@@ -86,5 +93,9 @@ if __name__ == "__main__":
             join=True,
         )
     else:
-        # running on slurm
-        run_worker(opt.rank, opt)
+        # running slurm batch
+        # skip the extra tasks
+        if opt.rank < opt.world_size:
+            num_gpus_per_node = 8
+            local_rank = opt.rank % num_gpus_per_node
+            run_worker(opt.rank, opt, local_rank)
