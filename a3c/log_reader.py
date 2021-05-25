@@ -40,6 +40,7 @@ def process_logs(files):
         experiment_data = {}
         for metric in (fetch_model_metric, update_model_metric, per_episode_time_metric):
             skip_count = 10
+            # skip_count = 20
             delay_scalars = ea.Scalars(metric)[skip_count:]
 
             values = []
@@ -102,8 +103,8 @@ if __name__ == "__main__":
         "grpc_6": "2021-05-20_21:44:03_grpc_6/events.out.tfevents.1621547044.q3-dy-p3dn24xlarge-2.45757.0",
         "grpc_8": "2021-05-20_21:52:48_grpc_8/events.out.tfevents.1621547568.q3-dy-p3dn24xlarge-2.60706.0",
         "grpc_10": "2021-05-21_22:12:10_grpc_10/events.out.tfevents.1621635130.q3-dy-p3dn24xlarge-7.51828.0",
-        "grpc_12": "2021-05-21_22:16:36_grpc_14/events.out.tfevents.1621635396.q3-dy-p3dn24xlarge-2.76488.0",
-        "grpc_14": "2021-05-21_22:22:11_grpc_16/events.out.tfevents.1621635732.q3-dy-p3dn24xlarge-1.8941.0",
+        "grpc_12": "2021-05-21_22:13:07_grpc_12/events.out.tfevents.1621635187.q3-dy-p3dn24xlarge-9.28738.0",
+        "grpc_14": "2021-05-21_22:16:36_grpc_14/events.out.tfevents.1621635396.q3-dy-p3dn24xlarge-2.76488.0",
         "grpc_16": "2021-05-21_22:22:11_grpc_16/events.out.tfevents.1621635732.q3-dy-p3dn24xlarge-1.8941.0",
         # trainrun python main.py --world_size=NUM --execution_mode=cpu_rpc --num_episodes=100
         "cpu_rpc_2": "2021-05-20_22:03:35_cpu_rpc_2/events.out.tfevents.1621548215.q3-dy-p3dn24xlarge-2.81600.0",
@@ -123,6 +124,9 @@ if __name__ == "__main__":
         "cuda_rpc_12": "2021-05-21_21:58:14_cuda_rpc_12/events.out.tfevents.1621634294.q3-dy-p3dn24xlarge-8.36174.0",
         "cuda_rpc_14": "2021-05-21_21:48:14_cuda_rpc_14/events.out.tfevents.1621633695.q3-dy-p3dn24xlarge-2.58513.0",
         "cuda_rpc_16": "2021-05-21_18:59:41_cuda_rpc_16/events.out.tfevents.1621623582.q3-dy-p3dn24xlarge-4.52918.0",
+        # latest
+        "cpu_rpc_16_2": "2021-05-24_20:13:09_cpu_rpc_16/events.out.tfevents.1621887189.q3-dy-p3dn24xlarge-1.10054.0",
+        "cpu_rpc_16_3": "2021-05-24_20:29:45_cpu_rpc_16/events.out.tfevents.1621888186.q3-dy-p3dn24xlarge-1.87514.0",
     }
     # calculate_rewards(files)
     process_logs(files)
